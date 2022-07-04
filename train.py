@@ -100,5 +100,54 @@ def main():
     logger.info('start training...')
     for epoch in range(start_epoch, 50):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, 50))
+        loss_ = []
+        classifier = classifier.train()
+
+        pbar = tqdm(enumerate(trainDataLoader, 0), total=len(trainDataLoader), smoothing=0.9)
+        for batch_id,(data,target) in pbar:
+            optimizer.zero_grad()
+            data,target = data.cuda(),target.cuda()
+
+            pred = classifier(data)
+
+            loss = criterion(pred,target)
+
+            current_loss = loss.item()
+            loss_.append(current_loss)
+            loss.backward()
+            optimizer.step()
+            global_step +=1
+            pbar.set_description('Loss:%f'% current_loss)
+        
+        scheduler.step()
+        train_mean_loss = np.mean(loss_)
+        log_string('Train MSE: %f' % train_mean_loss)
+
+        with torch.no_grad():
+            avg_loss = test(classifier.eval(),testDataLoader)
+
+            if (avg_loss <= lowest_avg_loss):
+                lowest_avg_loss = avg_loss
+                best_epoch = epoch + 1
+            log_string('Test Average MSE: %f, Best Average MSE: %f ' % (avg_mse,lowest_avg_mse))
+
+            if (avg_loss <= lowest_avg_loss):
+                logger.info('Save model..')
+                savepath = str(checkpoints_dir) + '/best_model.pth'
+                log_string('Saving at %s' % savepath)
+
+                state = {
+                    'epoch': best_epoch,
+                    'avg_mse': avg_mse,
+                    'model_state_dict': classifier.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                }
+                torch.save(state, savepath)
+            global_epoch += 1
     
+    logger.info('end')
+
+if __name__ == '__main__':
+    main()
+            
 
