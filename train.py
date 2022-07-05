@@ -2,13 +2,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from model import net
 import datetime
 import logging
 import importlib
 import shutil
 import argparse
 from pathlib import Path
+from data.dataset import Emodata
 from tqdm import tqdm
 
 def weights_init(m):
@@ -43,7 +44,7 @@ def main():
     exp_dir.mkdir(exist_ok=True)
     exp_dir = exp_dir.joinpath('classification')
     exp_dir.mkdir(exist_ok=True)
-    exp_dir = exp_dir.joinpath(timestr)
+    #exp_dir = exp_dir.joinpath(timestr)
     checkpoints_dir = exp_dir.joinpath('checkpoints/')
     checkpoints_dir.mkdir(exist_ok=True)
     log_dir = exp_dir.joinpath('logs/')
@@ -54,7 +55,7 @@ def main():
     logger = logging.getLogger("Model")
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler = logging.FileHandler('%s/%s.txt' % (log_dir, 'model/net'))
+    file_handler = logging.FileHandler('%s/%s.txt' % (log_dir, 'net'))
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -62,14 +63,16 @@ def main():
     #log_string(args)
     
     ''' Data Load '''
-    # train_dataset = 
-    # test_dataset =
-    # trainDataLoader = 
-    # testDataLoader = 
+    data = Emodata()
+
+    train_dataset,test_dataset = torch.utils.data.random_split(data, [294, 126], generator=torch.Generator().manual_seed(42))
+    
+    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8, drop_last=True)
+    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=8,drop_last=True)
     
     ''' Model Load '''
-    model = importlib.import_module('model/net')
-    classifier = model.LSTM(17,512,5,0.5)
+    model = net
+    classifier = model.LSTM(17,512,5,5,0.5)
     criterion = model.get_loss()
 
     classifier = classifier.cuda()
