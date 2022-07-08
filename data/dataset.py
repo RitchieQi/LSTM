@@ -9,7 +9,7 @@ import csv
 import dask.dataframe as dd
 osp = os.path
 
-datadir = '/home/liyuan/LSTM/data/dataset'
+datadir = '/home/xinyu/LSTM/data/dataset'
 class_list = [1,2,3,4,5]
 
 
@@ -31,12 +31,23 @@ class Emodata(Dataset):
         i = 0
         while index - sum(len_c[:i+1]) >= 0:
             i = i+1
-        index = index - sum(len_c[:i])
+        index = index - sum(len_c[:i])+1
         cls = num_c[i]
         #print(cls,index)
         return cls,index 
 
-
+    def onehot(self,label):
+        if label == 1:
+            oh = [1,0,0,0,0]
+        if label == 2:
+            oh = [0,1,0,0,0]
+        if label == 3:
+            oh = [0,0,1,0,0]
+        if label == 4:
+            oh = [0,0,0,1,0]
+        if label == 5:
+            oh = [0,0,0,0,1]
+        return oh
     def __len__(self):
         return self.len
 
@@ -49,7 +60,7 @@ class Emodata(Dataset):
         data_tensor = torch.Tensor(data.values.compute()).float()
         # print(data.values.compute().shape)
         # print(data_tensor.size())
-        #label = F.one_hot(torch.Tensor(label))
+        label = torch.Tensor(self.onehot(label))
         return data_tensor,label
 if __name__ == '__main__':
     from torch.utils.data import DataLoader

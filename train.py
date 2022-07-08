@@ -30,8 +30,8 @@ def test(model,loader):
 
         pred = classifier(data)
         
-        loss = F.cross_entropy(pred,data)
-        return loss
+        loss = F.cross_entropy(pred,target)
+    return loss
 
 def main():
     def log_string(str):
@@ -67,12 +67,12 @@ def main():
 
     train_dataset,test_dataset = torch.utils.data.random_split(data, [294, 126], generator=torch.Generator().manual_seed(42))
     
-    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8, drop_last=True)
-    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=8,drop_last=True)
+    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=8, drop_last=True)
+    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers=8,drop_last=True)
     
     ''' Model Load '''
     model = net
-    classifier = model.LSTM(17,512,5,5,0.5)
+    classifier = model.LSTM(17,512,2,5,0.5)
     criterion = model.get_loss()
 
     classifier = classifier.cuda()
@@ -112,9 +112,10 @@ def main():
             data,target = data.cuda(),target.cuda()
 
             pred = classifier(data)
+            #print(pred.size())
 
             loss = criterion(pred,target)
-
+            
             current_loss = loss.item()
             loss_.append(current_loss)
             loss.backward()
@@ -132,7 +133,7 @@ def main():
             if (avg_loss <= lowest_avg_loss):
                 lowest_avg_loss = avg_loss
                 best_epoch = epoch + 1
-            log_string('Test Average MSE: %f, Best Average MSE: %f ' % (avg_mse,lowest_avg_mse))
+            log_string('Test Average MSE: %f, Best Average MSE: %f ' % (avg_loss,lowest_avg_loss))
 
             if (avg_loss <= lowest_avg_loss):
                 logger.info('Save model..')
