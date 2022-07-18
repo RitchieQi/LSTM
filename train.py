@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model import net
+from model import cnn
 import datetime
 import logging
 import importlib
@@ -10,7 +11,11 @@ import shutil
 import argparse
 from pathlib import Path
 from data.dataset import Emodata
+from data.test_dataset import Emodata_raw
 from tqdm import tqdm
+
+inputsize = 17
+outputsize = 5 
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -21,7 +26,10 @@ def weights_init(m):
         torch.nn.init.xavier_normal_(m.weight.data)
         torch.nn.init.constant_(m.bias.data, 0.0)
 
-def test(model,loader):
+def test(model,loader,num_class=5):
+    
+    corr = 0
+    total = 0
     classifier = model.eval()
 
     for j, (data, target) in tqdm(enumerate(loader), total=len(loader)):
@@ -29,9 +37,18 @@ def test(model,loader):
         data, target = data.cuda(), target.cuda()
 
         pred = classifier(data)
-        
-        loss = F.cross_entropy(pred,target)
-    return loss
+
+        top_pred = pred.argmax(1, keepdim=True)
+        top_target = target.argmax(1, keepdim=True)
+        #print(top_target)
+        correct = top_pred.eq(top_target).sum()
+        corr = corr + correct.float()
+        total = total+target.shape[0]
+    acc = corr / total
+    print(corr,total)
+        #print(acc)
+    return acc
+    #return instance_acc,class_acc
 
 def main():
     def log_string(str):
@@ -63,16 +80,20 @@ def main():
     #log_string(args)
     
     ''' Data Load '''
-    data = Emodata()
-
-    train_dataset,test_dataset = torch.utils.data.random_split(data, [294, 126], generator=torch.Generator().manual_seed(42))
+    data = Emodata_raw()
+    train_dataset,test_dataset = torch.utils.data.random_split(data, [367, 157], generator=torch.Generator().manual_seed(42))
     
-    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=8, drop_last=True)
-    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers=8,drop_last=True)
+    #train_dataset = Testdata('train')
+    #test_dataset = Testdata('test')
+
+    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=8, drop_last=True)
+    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=8,drop_last=True)
     
     ''' Model Load '''
-    model = net
-    classifier = model.LSTM(17,512,2,5,0.5)
+    # model = net
+    # classifier = model.LSTM(inputsize,512,5,outputsize,0.5)
+    model = cnn
+    classifier = model.CNN(ninp=1)
     criterion = model.get_loss()
 
     classifier = classifier.cuda()
@@ -89,7 +110,7 @@ def main():
 
     optimizer = torch.optim.Adam(
             classifier.parameters(),
-            lr=0.0001,
+            lr=0.001,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=1e-4
@@ -97,25 +118,26 @@ def main():
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
     global_epoch = 0
     global_step = 0
-    lowest_avg_loss = 1
+    highest_avg_acc = 0.0
     current_loss = 0.0
     ''' Train '''
     logger.info('start training...')
-    for epoch in range(start_epoch, 50):
-        log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, 50))
+    for epoch in range(start_epoch, 500):
+        log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, 500))
         loss_ = []
         classifier = classifier.train()
 
         pbar = tqdm(enumerate(trainDataLoader, 0), total=len(trainDataLoader), smoothing=0.9)
         for batch_id,(data,target) in pbar:
             optimizer.zero_grad()
-            data,target = data.cuda(),target.cuda()
+            data,target = data.cuda().float(),target.cuda()
 
             pred = classifier(data)
-            #print(pred.size())
-
-            loss = criterion(pred,target)
             
+            #print(pred.argmax(1).view(4,1).float())
+            #print(target)
+            loss = criterion(pred,target)
+            #print(loss)
             current_loss = loss.item()
             loss_.append(current_loss)
             loss.backward()
@@ -128,21 +150,21 @@ def main():
         log_string('Train MSE: %f' % train_mean_loss)
 
         with torch.no_grad():
-            avg_loss = test(classifier.eval(),testDataLoader)
+            avg_acc = test(classifier.eval(),testDataLoader)
 
-            if (avg_loss <= lowest_avg_loss):
-                lowest_avg_loss = avg_loss
+            if (avg_acc >= highest_avg_acc):
+                highest_avg_acc = avg_acc
                 best_epoch = epoch + 1
-            log_string('Test Average MSE: %f, Best Average MSE: %f ' % (avg_loss,lowest_avg_loss))
+            log_string('Test Average acc: %f, Best Average acc: %f ' % (avg_acc,highest_avg_acc))
 
-            if (avg_loss <= lowest_avg_loss):
+            if (avg_acc >= highest_avg_acc):
                 logger.info('Save model..')
                 savepath = str(checkpoints_dir) + '/best_model.pth'
                 log_string('Saving at %s' % savepath)
 
                 state = {
                     'epoch': best_epoch,
-                    'avg_mse': avg_mse,
+                    'acc': avg_acc,
                     'model_state_dict': classifier.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                 }

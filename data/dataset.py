@@ -19,10 +19,10 @@ class Emodata(Dataset):
         self.classList = class_list
         self.lenCls = {}
         numData = []
-        for cls in self.classList:
-            tmpDir = osp.join(datadir,str(cls))
+        for cls_ in self.classList:
+            tmpDir = osp.join(datadir,str(cls_))
             len_ = len(os.listdir(tmpDir))
-            self.lenCls[cls] = len_
+            self.lenCls[cls_] = len_
             numData.append(len_)
         self.len = np.sum(numData)
     
@@ -31,10 +31,11 @@ class Emodata(Dataset):
         i = 0
         while index - sum(len_c[:i+1]) >= 0:
             i = i+1
-        index = index - sum(len_c[:i])+1
-        cls = num_c[i]
+        index = index - sum(len_c[:i]) + 1
+        class_ = num_c[i]
+        
         #print(cls,index)
-        return cls,index 
+        return class_,index 
 
     def onehot(self,label):
         if label == 1:
@@ -47,20 +48,24 @@ class Emodata(Dataset):
             oh = [0,0,0,1,0]
         if label == 5:
             oh = [0,0,0,0,1]
+        
         return oh
     def __len__(self):
         return self.len
 
     def __getitem__(self,index):
-        label,reid = self.reindex(index)
+        label_,reid = self.reindex(index)
         filename = str(reid)+'.csv'
-        datapath = osp.join(datadir,str(label),filename)
+        datapath = osp.join(datadir,str(label_),filename)
 
         data = dd.read_csv(datapath,encoding = 'UTF-8')
         data_tensor = torch.Tensor(data.values.compute()).float()
         # print(data.values.compute().shape)
         # print(data_tensor.size())
-        label = torch.Tensor(self.onehot(label))
+        label = torch.Tensor(self.onehot(label_))
+        #print(label_)
+        
+        #label = torch.Tensor([label_])
         return data_tensor,label
 if __name__ == '__main__':
     from torch.utils.data import DataLoader
